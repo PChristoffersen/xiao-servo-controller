@@ -33,6 +33,7 @@ if(PICO_TOOLCHAIN_PATH MATCHES "RISCV")
 endif()
 # ====================================================================================
 set(PICO_BOARD seeed_xiao_rp2040 CACHE STRING "Board type")
+set(TINYUSB_OPT_OS OPT_OS_FREERTOS CACHE STRING "TinyUSB OS")
 
 # Pull in Raspberry Pi Pico SDK (must be before project)
 include(pico_sdk_import.cmake)
@@ -40,6 +41,9 @@ include(pico_sdk_import.cmake)
 if (PICO_SDK_VERSION_STRING VERSION_LESS "1.4.0")
   message(FATAL_ERROR "Raspberry Pi Pico SDK version 1.4.0 (or later) required. Your version is ${PICO_SDK_VERSION_STRING}")
 endif()
+
+# Include FreeRTOS Kernel
+add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/ext/FreeRTOS-Kernel/portable/ThirdParty/GCC/RP2040)
 
 project(xiao_sensor_servo C CXX ASM)
 
@@ -63,22 +67,32 @@ target_sources(xiao_sensor_servo PRIVATE
 )
 
 # Generate PIO header
-#pico_generate_pio_header(xiao_sensor_servo ${CMAKE_CURRENT_LIST_DIR}/blink.pio)
-
+pico_generate_pio_header(xiao_sensor_servo ${CMAKE_CURRENT_LIST_DIR}/src/uart/uart_rx.pio)
+pico_generate_pio_header(xiao_sensor_servo ${CMAKE_CURRENT_LIST_DIR}/src/uart/uart_tx.pio)
+pico_generate_pio_header(xiao_sensor_servo ${CMAKE_CURRENT_LIST_DIR}/src/lighting/ws2812.pio)
 
 # Add the standard library to the build
 target_link_libraries(xiao_sensor_servo
-        pico_stdlib)
+    pico_stdlib
+)
 
 # Add the standard include files to the build
 target_include_directories(xiao_sensor_servo PRIVATE
-  ${CMAKE_CURRENT_LIST_DIR}
-  ${CMAKE_CURRENT_LIST_DIR}/.. # for our common lwipopts or any other standard includes, if required
+    ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 # Add any user requested libraries
 target_link_libraries(xiao_sensor_servo 
+    FreeRTOS-Kernel
+    FreeRTOS-Kernel-Heap4
+    tinyusb_device
+    tinyusb_board
     pico_stdlib
+    pico_unique_id
+    hardware_irq
+    hardware_dma
+    hardware_pwm
+    hardware_pio
 )
 
 pico_add_extra_outputs(xiao_sensor_servo)
