@@ -97,11 +97,11 @@
 #define configRECORD_STACK_HIGH_ADDRESS         1
 #define configGENERATE_RUN_TIME_STATS           1
 #define configUSE_TRACE_FACILITY                1
-#define configUSE_STATS_FORMATTING_FUNCTIONS    0
+#define configUSE_STATS_FORMATTING_FUNCTIONS    1
 #if configGENERATE_RUN_TIME_STATS
-#define configRUN_TIME_COUNTER_TYPE uint64_t
+#define configRUN_TIME_COUNTER_TYPE uint32_t
 extern void vMainConfigureTimerForRunTimeStats();
-extern uint64_t ulMainGetRuntimeCounterValue(void);
+extern uint32_t ulMainGetRuntimeCounterValue(void);
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() vMainConfigureTimerForRunTimeStats()
 #define portGET_RUN_TIME_COUNTER_VALUE() ulMainGetRuntimeCounterValue()
 #endif
@@ -126,7 +126,7 @@ extern uint64_t ulMainGetRuntimeCounterValue(void);
 */
 
 /* SMP port only */
-#define configNUMBER_OF_CORES                   2
+#define configNUMBER_OF_CORES                   1
 #define configTICK_CORE                         0
 #define configRUN_MULTIPLE_PRIORITIES           1
 #if configNUMBER_OF_CORES > 1

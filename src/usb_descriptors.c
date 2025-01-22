@@ -178,6 +178,8 @@ uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 {
     (void) langid;
 
+    printf("tud_descriptor_string_cb: index=%d\n", index);
+
     if (usb_serial[0]==0x00) {
         pico_unique_board_id_t id;
         pico_get_unique_board_id(&id);

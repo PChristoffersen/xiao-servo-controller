@@ -1,7 +1,7 @@
-FROM mcr.microsoft.com/devcontainers/cpp:1-ubuntu-24.04
+FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04
 
 # Remove Ubuntu from image since it is preventing the vscode user from claiming the UID
-RUN userdel --remove ubuntu
+#RUN userdel --remove ubuntu
 
 # [Optional] Uncomment this section to install additional vcpkg ports.
 # RUN su vscode -c "${VCPKG_ROOT}/vcpkg install <your-port-name-here>"
@@ -21,3 +21,10 @@ RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
         less \
         curl \
         picocom
+
+
+RUN <<EOF
+usermod -a -G dialout vscode
+usermod -a -G plugdev vscode
+usermod -a -G root vscode  
+EOF

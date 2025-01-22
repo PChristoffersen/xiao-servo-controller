@@ -9,7 +9,7 @@
 // Task priorities
 // ----------------------------------------------------------------------
 #define USBD_TASK_PRIORITY                 ( configMAX_PRIORITIES - 2UL )
-#define UART_PIO_TASK_PRIORITY             ( configMAX_PRIORITIES - 2UL )
+#define UART_PIO_TASK_PRIORITY             ( configMAX_PRIORITIES - 3UL )
 #define STATUS_TASK_PRIORITY               ( tskIDLE_PRIORITY + 1 )
 
 
@@ -18,7 +18,9 @@
 // ----------------------------------------------------------------------
 #define USBD_TASK_STACK_SIZE               ( configMINIMAL_STACK_SIZE )
 #if configUSE_CORE_AFFINITY
-#define USBD_TASK_CORE_AFFINITY            configTASK_DEFAULT_CORE_AFFINITY
+//#define USBD_TASK_CORE_AFFINITY            configTASK_DEFAULT_CORE_AFFINITY
+#define USBD_TASK_CORE 0
+#define USBD_TASK_CORE_AFFINITY            (1UL<<USBD_TASK_CORE)
 #endif
 
 
@@ -64,10 +66,11 @@
 // ----------------------------------------------------------------------
 #define UART_PIO            pio1
 #define UART_PIO_IRQ_BASE   PIO1_IRQ_0
-#define UART_PIO_TASK_STACK_SIZE           ( configMINIMAL_STACK_SIZE )
+#define UART_PIO_TASK_STACK_SIZE           256
 #if configUSE_CORE_AFFINITY
 #define UART_PIO_TASK_CORE_AFFINITY        USBD_TASK_CORE_AFFINITY
-#define UART_PIO_IRQ_CORE                  1
+#define UART_PIO_IRQ_CORE                  0
+#define UART_PIO_IRQ_CORE_AFFINITY         (1UL<<UART_PIO_IRQ_CORE)
 #endif
 
 #if CFG_TUD_CDC > 0
@@ -78,8 +81,8 @@
 
 #if CFG_TUD_CDC > 1
 #define PIO_UART1_CDC 1
-#define PIO_UART1_RX_PIN XIAO_D2_PIN
-#define PIO_UART1_TX_PIN XIAO_D3_PIN
+#define PIO_UART1_RX_PIN XIAO_D3_PIN
+#define PIO_UART1_TX_PIN XIAO_D2_PIN
 #endif
 
 

@@ -1,4 +1,5 @@
 #include <stdio.h>
+#include <stdlib.h>
 #include <pico/stdlib.h>
 #include <hardware/watchdog.h>
 #include <FreeRTOS.h>
@@ -18,19 +19,10 @@ static_assert(USBD_TASK_PRIORITY < configMAX_PRIORITIES);
 static bool g_usb_device_configured = false;
 
 
-#define HELLO_TASK_PRIORITY    ( 10 )
-#define TEST_TASK_PRIORITY     ( 11 )
+#define STATISTICS_TASK_PRIORITY ( 1 )
+#define TEST_TASK_PRIORITY       ( 11 )
 
-static void hello_task(__unused void *params)
-{
-    unsigned cnt = 0;
 
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(5000));
-        printf("%08x Hello %u\n", time_us_32(), cnt);
-        cnt++;
-    }
-}
 
 
 static void test_task(__unused void *params)
@@ -105,6 +97,22 @@ static void status_task(__unused void *params)
     }
 }
 
+#if configUSE_TRACE_FACILITY
+
+void print_tasks_info();
+
+
+static void statistics_task(__unused void *params)
+{
+    while (true) {
+        vTaskDelay(pdMS_TO_TICKS(5000));
+        #if 0
+        print_tasks_info();
+        #endif
+        printf("Uptime: %u seconds from core %u\n", xTaskGetTickCount() / configTICK_RATE_HZ, get_core_num());
+    }
+}
+#endif
 
 
 //--------------------------------------------------------------------+
@@ -117,14 +125,13 @@ static StackType_t  g_usb_task_stack[USBD_TASK_STACK_SIZE];
 
 static void usb_device_task(__unused void *param)
 {
+    printf("USB task started on core %u\n", get_core_num());
     tud_init(TUD_OPT_RHPORT);
     board_init_after_tusb();
 
-    #ifdef USBD_TASK_CORE_AFFINITY
-    vTaskCoreAffinitySet(NULL, USBD_TASK_CORE_AFFINITY);
-    #endif
     while (true) {
         tud_task();
+        watchdog_update();
     }
 }
 
@@ -189,18 +196,25 @@ int main(void) {
         printf("Starting FreeRTOS on core %u\n", get_core_num());
     #endif
 
+    #ifdef USBD_TASK_CORE_AFFINITY
+    g_usb_task = xTaskCreateStaticAffinitySet(usb_device_task, USBD_TASK_NAME, USBD_TASK_STACK_SIZE, NULL, USBD_TASK_PRIORITY, g_usb_task_stack, &g_usb_task_buf, USBD_TASK_CORE_AFFINITY);
+    #else
     g_usb_task = xTaskCreateStatic(usb_device_task, USBD_TASK_NAME, USBD_TASK_STACK_SIZE, NULL, USBD_TASK_PRIORITY, g_usb_task_stack, &g_usb_task_buf);
-    #ifdef USBD_TASK_CORE
-    vTaskCoreAffinitySet(g_usb_task, (1UL<<USBD_TASK_CORE));
     #endif
     xTaskCreateStatic(status_task, STATUS_TASK_NAME, STATUS_TASK_STACK_SIZE, NULL, STATUS_TASK_PRIORITY, g_status_task_stack, &g_status_task_buf);
 
     xTaskCreate(test_task, "test", configMINIMAL_STACK_SIZE, NULL, TEST_TASK_PRIORITY, NULL);
-    xTaskCreate(hello_task, "hello", configMINIMAL_STACK_SIZE, NULL, HELLO_TASK_PRIORITY, NULL);
+
+    #if configUSE_TRACE_FACILITY
+    xTaskCreate(statistics_task, "statistics", configMINIMAL_STACK_SIZE, NULL, STATISTICS_TASK_PRIORITY, NULL);
+    #endif
 
     /* Start the tasks and timer running. */
     printf("Starting task scheduler\n");
     vTaskStartScheduler();
+
+    printf("Error: Failed to start scheduler\n");
+    watchdog_reboot(0, 0, 1000);
 
     return 0;
 }
