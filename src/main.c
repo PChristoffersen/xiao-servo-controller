@@ -25,6 +25,7 @@ static bool g_usb_device_configured = false;
 
 
 
+#if 0
 static void test_task(__unused void *params)
 {
     uint cnt = 0;
@@ -44,7 +45,10 @@ static void test_task(__unused void *params)
             cnt = 0;
         }
     }
+
+    vTaskDelete(NULL);
 }
+#endif
 
 
 
@@ -126,6 +130,9 @@ static StackType_t  g_usb_task_stack[USBD_TASK_STACK_SIZE];
 static void usb_device_task(__unused void *param)
 {
     printf("USB task started on core %u\n", get_core_num());
+
+    vTaskDelay(pdMS_TO_TICKS(100));
+
     tud_init(TUD_OPT_RHPORT);
     board_init_after_tusb();
 
@@ -187,26 +194,51 @@ void vApplicationIdleHook()
 // Main
 //--------------------------------------------------------------------+
 
-int main(void) {
-    board_init();
 
-    #if ( configNUMBER_OF_CORES > 1 )
-        printf("Starting FreeRTOS SMP on %d cores\n", configNUMBER_OF_CORES);
-    #else
-        printf("Starting FreeRTOS on core %u\n", get_core_num());
-    #endif
+static void app_main(__unused void *params)
+{
+    printf("Starting main\n");
+
+    // Clear all neopixels
+    neopixel_strip_set_enabled(HID_NEOPIXEL_STRIP, true);
+    neopixel_strip_fill(HID_NEOPIXEL_STRIP, NEOPIXEL_BLACK);
+    neopixel_strip_show(HID_NEOPIXEL_STRIP);
+
 
     #ifdef USBD_TASK_CORE_AFFINITY
     g_usb_task = xTaskCreateStaticAffinitySet(usb_device_task, USBD_TASK_NAME, USBD_TASK_STACK_SIZE, NULL, USBD_TASK_PRIORITY, g_usb_task_stack, &g_usb_task_buf, USBD_TASK_CORE_AFFINITY);
     #else
     g_usb_task = xTaskCreateStatic(usb_device_task, USBD_TASK_NAME, USBD_TASK_STACK_SIZE, NULL, USBD_TASK_PRIORITY, g_usb_task_stack, &g_usb_task_buf);
     #endif
-    xTaskCreateStatic(status_task, STATUS_TASK_NAME, STATUS_TASK_STACK_SIZE, NULL, STATUS_TASK_PRIORITY, g_status_task_stack, &g_status_task_buf);
+    //xTaskCreateStatic(status_task, STATUS_TASK_NAME, STATUS_TASK_STACK_SIZE, NULL, STATUS_TASK_PRIORITY, g_status_task_stack, &g_status_task_buf);
 
-    xTaskCreate(test_task, "test", configMINIMAL_STACK_SIZE, NULL, TEST_TASK_PRIORITY, NULL);
+    //xTaskCreate(test_task, "test", configMINIMAL_STACK_SIZE, NULL, TEST_TASK_PRIORITY, NULL);
+
 
     #if configUSE_TRACE_FACILITY
     xTaskCreate(statistics_task, "statistics", configMINIMAL_STACK_SIZE, NULL, STATISTICS_TASK_PRIORITY, NULL);
+    #endif
+
+    printf("Main done\n");
+    vTaskDelete(NULL);
+}
+
+
+int main(void) {
+    board_init();
+
+    printf("-----------------------------------\n");
+    #if ( configNUMBER_OF_CORES > 1 )
+        printf("Starting FreeRTOS SMP on %d cores\n", configNUMBER_OF_CORES);
+    #else
+        printf("Starting FreeRTOS on core %u\n", get_core_num());
+    #endif
+    printf("-----------------------------------\n");
+
+    #if configUSE_CORE_AFFINITY
+    xTaskCreateAffinitySet(app_main, "app_main", configMINIMAL_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, NULL,  (1UL<<0));
+    #else
+    xTaskCreate(app_main, "app_main", configMINIMAL_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, NULL);
     #endif
 
     /* Start the tasks and timer running. */

@@ -103,8 +103,10 @@ enum
     #if CFG_TUD_HID > 0
     ITF_NUM_HID,
     #endif
+    #if CFG_TUD_CDC > 0
     ITF_NUM_CDC_0,
     ITF_NUM_CDC_0_DATA,
+    #endif
     #if CFG_TUD_CDC > 1
     ITF_NUM_CDC_1,
     ITF_NUM_CDC_1_DATA,
@@ -131,15 +133,17 @@ static uint8_t const desc_fs_configuration[] =
 
     #if CFG_TUD_HID > 0
     // HID: Interface number, string index, protocol, report descriptor len, EP In address, size & polling interval
-    TUD_HID_DESCRIPTOR(ITF_NUM_HID, 6, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 5),
+    TUD_HID_DESCRIPTOR(ITF_NUM_HID, 4, HID_ITF_PROTOCOL_NONE, sizeof(desc_hid_report), EPNUM_HID, CFG_TUD_HID_EP_BUFSIZE, 5),
     #endif
 
+    #if CFG_TUD_CDC > 0
     // 1st CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size.
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 4, EPNUM_CDC_0_NOTIF, 8, EPNUM_CDC_0_OUT, EPNUM_CDC_0_IN, 64),
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_0, 5, EPNUM_CDC_0_NOTIF, 8, EPNUM_CDC_0_OUT, EPNUM_CDC_0_IN, 64),
+    #endif
 
     #if CFG_TUD_CDC > 1
     // 2nd CDC: Interface number, string index, EP notification address and size, EP data address (out, in) and size.
-    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 4, EPNUM_CDC_1_NOTIF, 8, EPNUM_CDC_1_OUT, EPNUM_CDC_1_IN, 64),
+    TUD_CDC_DESCRIPTOR(ITF_NUM_CDC_1, 6, EPNUM_CDC_1_NOTIF, 8, EPNUM_CDC_1_OUT, EPNUM_CDC_1_IN, 64),
     #endif
 
 };
@@ -164,10 +168,12 @@ static char usb_serial[PICO_UNIQUE_BOARD_ID_SIZE_BYTES * 2 + 1] = { 0x00 };
 static char const* string_desc_arr [] =
 {
     (const char[]) { 0x09, 0x04 }, // 0: is supported language is English (0x0409)
-    "Raspberry Pi",                // 1: Manufacturer
+    "SeeedStudio",                 // 1: Manufacturer
     PICO_PROGRAM_NAME,             // 2: Product
     usb_serial,                    // 3: Serials, should use chip ID
-    "TinyUSB CDC",                 // 4: CDC Interface
+    "TinyUSB HID",                 // 4: HID
+    "Servo CDC",                   // 5: CDC Interface 1
+    "Lidar CDC",                   // 6: CDC Interface 2
 };
 
 static uint16_t _desc_str[32];
@@ -177,8 +183,6 @@ static uint16_t _desc_str[32];
 uint16_t const* tud_descriptor_string_cb(uint8_t index, uint16_t langid)
 {
     (void) langid;
-
-    printf("tud_descriptor_string_cb: index=%d\n", index);
 
     if (usb_serial[0]==0x00) {
         pico_unique_board_id_t id;

@@ -47,7 +47,7 @@ pico_sdk_init()
 
 add_executable(xiao_sensor_servo)
 
-pico_set_program_name(xiao_sensor_servo "xiao_sensor_servo")
+pico_set_program_name(xiao_sensor_servo "Xiao Sensor Servo")
 pico_set_program_version(xiao_sensor_servo "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
@@ -60,6 +60,7 @@ target_sources(xiao_sensor_servo PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src/debug.c
     ${CMAKE_CURRENT_LIST_DIR}/src/usb_descriptors.c
     ${CMAKE_CURRENT_LIST_DIR}/src/hid/hid_device.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/hid/lamp_array.c
     ${CMAKE_CURRENT_LIST_DIR}/src/lighting/neopixel.c
     ${CMAKE_CURRENT_LIST_DIR}/src/lighting/status_led.c
     ${CMAKE_CURRENT_LIST_DIR}/src/uart/cdc_device.c

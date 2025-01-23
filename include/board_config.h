@@ -8,8 +8,9 @@
 // ----------------------------------------------------------------------
 // Task priorities
 // ----------------------------------------------------------------------
-#define USBD_TASK_PRIORITY                 ( configMAX_PRIORITIES - 2UL )
-#define UART_PIO_TASK_PRIORITY             ( configMAX_PRIORITIES - 3UL )
+#define MAIN_TASK_PRIORITY                 ( configMAX_PRIORITIES - 1 )
+#define USBD_TASK_PRIORITY                 ( 21 )
+#define UART_PIO_TASK_PRIORITY             ( 20 )
 #define STATUS_TASK_PRIORITY               ( tskIDLE_PRIORITY + 1 )
 
 
