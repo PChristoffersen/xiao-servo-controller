@@ -11,6 +11,7 @@
 #define MAIN_TASK_PRIORITY                 ( configMAX_PRIORITIES - 1 )
 #define USBD_TASK_PRIORITY                 ( 21 )
 #define UART_PIO_TASK_PRIORITY             ( 20 )
+#define KEYBOARD_TASK_PRIORITY             ( tskIDLE_PRIORITY + 2 )
 #define STATUS_TASK_PRIORITY               ( tskIDLE_PRIORITY + 1 )
 
 
@@ -54,12 +55,11 @@
 // HID
 // ----------------------------------------------------------------------
 /* Buttons */
-#define BUTTON_SW1_PIN XIAO_D4
-#define BUTTON_SW2_PIN XIAO_D5
-
-#define HID_NEOPIXEL_STRIP 1
-#define HID_NEOPIXEL_COUNT NEOPIXEL_STRIP1_COUNT
-
+#define KEYBOARD_DEBUNCE_DELAY_MS 100
+#define KEYBOARD_SW1_PIN    XIAO_D4_PIN
+#define KEYBOARD_SW1_CODE   HID_KEY_F20
+#define KEYBOARD_SW2_PIN    XIAO_D5_PIN
+#define KEYBOARD_SW2_CODE   HID_KEY_F21
 
 
 // ----------------------------------------------------------------------
@@ -69,8 +69,9 @@
 #define UART_PIO_IRQ_BASE   PIO1_IRQ_0
 #define UART_PIO_TASK_STACK_SIZE           256
 #if configUSE_CORE_AFFINITY
-#define UART_PIO_TASK_CORE_AFFINITY        USBD_TASK_CORE_AFFINITY
-#define UART_PIO_IRQ_CORE                  0
+//#define UART_PIO_TASK_CORE_AFFINITY        USBD_TASK_CORE_AFFINITY
+#define UART_PIO_TASK_CORE_AFFINITY        tskNO_AFFINITY
+#define UART_PIO_IRQ_CORE                  1
 #define UART_PIO_IRQ_CORE_AFFINITY         (1UL<<UART_PIO_IRQ_CORE)
 #endif
 

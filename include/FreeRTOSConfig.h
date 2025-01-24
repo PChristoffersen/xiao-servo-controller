@@ -99,9 +99,9 @@
 #define configUSE_TRACE_FACILITY                1
 #define configUSE_STATS_FORMATTING_FUNCTIONS    1
 #if configGENERATE_RUN_TIME_STATS
-#define configRUN_TIME_COUNTER_TYPE uint32_t
+#define configRUN_TIME_COUNTER_TYPE uint64_t
 extern void vMainConfigureTimerForRunTimeStats();
-extern uint32_t ulMainGetRuntimeCounterValue(void);
+extern uint64_t ulMainGetRuntimeCounterValue(void);
 #define portCONFIGURE_TIMER_FOR_RUN_TIME_STATS() vMainConfigureTimerForRunTimeStats()
 #define portGET_RUN_TIME_COUNTER_VALUE() ulMainGetRuntimeCounterValue()
 #endif
@@ -115,6 +115,7 @@ extern uint32_t ulMainGetRuntimeCounterValue(void);
 /* Software timer related definitions. */
 #define configUSE_TIMERS                        1
 #define configTIMER_TASK_PRIORITY               ( configMAX_PRIORITIES - 1 )
+#define configTIMER_SERVICE_TASK_CORE_AFFINITY  tskNO_AFFINITY
 #define configTIMER_QUEUE_LENGTH                10
 #define configTIMER_TASK_STACK_DEPTH            ( configMINIMAL_STACK_SIZE )
 

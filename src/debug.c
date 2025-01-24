@@ -4,6 +4,7 @@
 #include <pico/stdlib.h>
 #include <FreeRTOS.h>
 #include <task.h>
+#include <timers.h>
 
 #if configCHECK_FOR_STACK_OVERFLOW
 
@@ -20,9 +21,9 @@ void vMainConfigureTimerForRunTimeStats()
 {
 }
 
-uint32_t ulMainGetRuntimeCounterValue(void)
+uint64_t ulMainGetRuntimeCounterValue(void)
 {
-    return 0xFFFFFFFF & to_us_since_boot(get_absolute_time());
+    return to_us_since_boot(get_absolute_time());
 }
 
 
@@ -43,7 +44,7 @@ void print_tasks_info()
     TaskStatus_t *status = NULL;
     UBaseType_t status_size;
     UBaseType_t status_count;
-    uint32_t total_runtime = 0;
+    uint64_t total_runtime = 0;
 
     status_size = uxTaskGetNumberOfTasks() + 5;
     status = calloc(status_size, sizeof(TaskStatus_t));
@@ -60,7 +61,7 @@ void print_tasks_info()
     for (uint i=0; i<status_count; i++) {
         TaskStatus_t *st = &status[i];
         char state = ' ';
-        uint32_t percentage = st->ulRunTimeCounter / total_runtime;
+        uint64_t percentage = st->ulRunTimeCounter / total_runtime;
 
         switch (st->eCurrentState) {
             case eRunning:     /* A task is querying the state of itself, so must be running. */
@@ -83,12 +84,12 @@ void print_tasks_info()
                 break;
         }
 
-        printf("%-16s %c     %2u     %c %7lu %12lu %3lu%%\n",
+        printf("%-16s %c     %2u     %c %7lu %12lu %3llu%%\n",
             st->pcTaskName, 
             state,
             st->uxCurrentPriority,
-            #if ( configTASKLIST_INCLUDE_COREID == 1 )
-            st->xCoreID==tskNO_AFFINITY ? '-' : ('0'+st->xCoreID),
+            #if ( configUSE_CORE_AFFINITY )
+            st->uxCoreAffinityMask==tskNO_AFFINITY ? '-' : ('0'+(st->uxCoreAffinityMask>>1)),
             #else
             '?',
             #endif

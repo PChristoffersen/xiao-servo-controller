@@ -6,6 +6,7 @@
 #include <task.h>
 
 #include "board_config.h"
+#include "hid/keyboard.h"
 #include "lighting/status_led.h"
 #include "lighting/neopixel.h"
 #include "uart/pio_uart.h"
@@ -69,13 +70,6 @@ static void board_init()
     neopixel_init();
 }
 
-static void board_init_after_tusb()
-{
-    pio_uart_init();
-}
-
-
-
 //--------------------------------------------------------------------+
 // Status 
 //--------------------------------------------------------------------+
@@ -110,7 +104,7 @@ static void statistics_task(__unused void *params)
 {
     while (true) {
         vTaskDelay(pdMS_TO_TICKS(5000));
-        #if 0
+        #if 1
         print_tasks_info();
         #endif
         printf("Uptime: %u seconds from core %u\n", xTaskGetTickCount() / configTICK_RATE_HZ, get_core_num());
@@ -134,7 +128,9 @@ static void usb_device_task(__unused void *param)
     vTaskDelay(pdMS_TO_TICKS(100));
 
     tud_init(TUD_OPT_RHPORT);
-    board_init_after_tusb();
+
+    pio_uart_init();
+    keyboard_init();
 
     while (true) {
         tud_task();
@@ -200,9 +196,9 @@ static void app_main(__unused void *params)
     printf("Starting main\n");
 
     // Clear all neopixels
-    neopixel_strip_set_enabled(HID_NEOPIXEL_STRIP, true);
-    neopixel_strip_fill(HID_NEOPIXEL_STRIP, NEOPIXEL_BLACK);
-    neopixel_strip_show(HID_NEOPIXEL_STRIP);
+    neopixel_strip_set_enabled(NEOPIXEL_STRIP1, true);
+    neopixel_strip_fill(NEOPIXEL_STRIP1, NEOPIXEL_BLACK);
+    neopixel_strip_show(NEOPIXEL_STRIP1);
 
 
     #ifdef USBD_TASK_CORE_AFFINITY
@@ -210,7 +206,7 @@ static void app_main(__unused void *params)
     #else
     g_usb_task = xTaskCreateStatic(usb_device_task, USBD_TASK_NAME, USBD_TASK_STACK_SIZE, NULL, USBD_TASK_PRIORITY, g_usb_task_stack, &g_usb_task_buf);
     #endif
-    //xTaskCreateStatic(status_task, STATUS_TASK_NAME, STATUS_TASK_STACK_SIZE, NULL, STATUS_TASK_PRIORITY, g_status_task_stack, &g_status_task_buf);
+    xTaskCreateStatic(status_task, STATUS_TASK_NAME, STATUS_TASK_STACK_SIZE, NULL, STATUS_TASK_PRIORITY, g_status_task_stack, &g_status_task_buf);
 
     //xTaskCreate(test_task, "test", configMINIMAL_STACK_SIZE, NULL, TEST_TASK_PRIORITY, NULL);
 
@@ -236,7 +232,7 @@ int main(void) {
     printf("-----------------------------------\n");
 
     #if configUSE_CORE_AFFINITY
-    xTaskCreateAffinitySet(app_main, "app_main", configMINIMAL_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, NULL,  (1UL<<0));
+    xTaskCreateAffinitySet(app_main, "app_main", configMINIMAL_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, (1UL<<0), NULL);
     #else
     xTaskCreate(app_main, "app_main", configMINIMAL_STACK_SIZE, NULL, MAIN_TASK_PRIORITY, NULL);
     #endif

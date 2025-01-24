@@ -80,7 +80,7 @@ uint16_t lamp_array_get_attributes(uint8_t* buffer, uint16_t reqlen)
         .position_x = LAMP_WIDTH * current_lamp_id + LAMP_WIDTH/2,
         .position_y = LAMP_HEIGHT/2,
         .position_z = 0,
-        .purpose = 0,
+        .purpose = LAMP_PURPOSE_BRANDING,
         .update_latency = LAMP_UPDATE_LATENCY,
         .red_level_count = 0xFF,
         .green_level_count = 0xFF,
@@ -162,10 +162,11 @@ void lamp_array_set_array_control(uint8_t const* buffer, uint16_t bufsize)
     tud_desc_lamp_control_t const* control = (tud_desc_lamp_control_t const*) buffer;
 
     DEBUG("lamp_array_set_array_control: autonomousMode=%u\n", control->autonomousMode);
-    autonomous_mode = control->autonomousMode;
-    if (autonomous_mode) {
+    bool new_mode = control->autonomousMode;
+    if (new_mode != autonomous_mode) {
         neopixel_strip_fill(NEOPIXEL_STRIP1, NEOPIXEL_BLACK);
         neopixel_strip_show(NEOPIXEL_STRIP1);
+        autonomous_mode = new_mode;
     }
 }
 
