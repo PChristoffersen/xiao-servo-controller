@@ -67,7 +67,7 @@
 // ----------------------------------------------------------------------
 #define UART_PIO            pio1
 #define UART_PIO_IRQ_BASE   PIO1_IRQ_0
-#define UART_PIO_TASK_STACK_SIZE           256
+#define UART_PIO_TASK_STACK_SIZE           (256)
 #if configUSE_CORE_AFFINITY
 //#define UART_PIO_TASK_CORE_AFFINITY        USBD_TASK_CORE_AFFINITY
 #define UART_PIO_TASK_CORE_AFFINITY        tskNO_AFFINITY

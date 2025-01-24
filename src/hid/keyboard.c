@@ -50,6 +50,10 @@ static const struct device_t g_devices[] = {
 };
 #define N_DEVICES (count_of(g_devices))
 
+static_assert(KEYBOARD_SW2_PIN == KEYBOARD_SW1_PIN+1, "The pin numbers must be sequential without any gaps");
+
+
+
 static struct device_data_t g_device_data[N_DEVICES];
 
 #define DEVICE_DATA(gpio) (&g_device_data[gpio - g_devices[0].pin])

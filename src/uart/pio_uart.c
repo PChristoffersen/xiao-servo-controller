@@ -5,8 +5,9 @@
 #include <pico/stdlib.h>
 #include <pico/util/queue.h>
 #include <hardware/pio.h>
-#include <tusb.h>
 #include <task.h>
+#include <stream_buffer.h>
+#include <tusb.h>
 
 #include "board_config.h"
 #include "cdc_device.h"
@@ -21,10 +22,7 @@
 #define UART_DEFAULT_BAUD 9600
 #define UART_FIFO_SIZE 512
 
-#define UART_TASK_NAME "pio_uart_%u"
-#define UART_TASK_RX_EVENT (1<<0)
-#define UART_TASK_TX_EVENT (1<<1)
-//#define UART_TASK_TIMEOUT (pdMS_TO_TICKS(100))
+#define UART_TASK_NAME "pio_uart%u_%s"
 #define UART_TASK_FLUSH_INTERVAL (pdMS_TO_TICKS(4))
 
 #define UART_PIO_RX_IRQ     (UART_PIO_IRQ_BASE)
@@ -68,12 +66,21 @@ struct device_data_t {
     uint    rx_sm;
     uint    tx_sm;
 
-    queue_t rx_fifo;
-    queue_t tx_fifo;
+    StreamBufferHandle_t rx_fifo;
+    StaticStreamBuffer_t rx_fifo_def;
+    uint8_t              rx_fifo_storage[UART_FIFO_SIZE];
 
-    TaskHandle_t task;
-    StackType_t  task_stack[UART_PIO_TASK_STACK_SIZE];
-    StaticTask_t task_def;
+    TaskHandle_t rx_task;
+    StaticTask_t rx_task_def;
+    StackType_t  rx_task_stack[UART_PIO_TASK_STACK_SIZE];
+
+    StreamBufferHandle_t tx_fifo;
+    StaticStreamBuffer_t tx_fifo_def;
+    uint8_t              tx_fifo_storage[UART_FIFO_SIZE];
+
+    TaskHandle_t tx_task;
+    StaticTask_t tx_task_def;
+    StackType_t  tx_task_stack[UART_PIO_TASK_STACK_SIZE];
 };
 
 
@@ -128,26 +135,11 @@ static void __isr pio_rx_irq_func()
     // Loop through devices and move PIO RX data to fifo
     for (uint i=0; i<N_DEVICES; i++) {
         struct device_data_t *data = &g_device_data[i];
-        uint rx_cnt = 0;
 
         // Check RX FIFO
         while (!pio_sm_is_rx_fifo_empty(UART_PIO, data->rx_sm)) {
             char c = uart_rx_program_getc(UART_PIO, data->rx_sm);
-            if (queue_try_add(&data->rx_fifo, &c)) {
-                rx_cnt++;
-            }
-            else {
-                //DEBUG_PANIC("RX fifo full");
-                rx_cnt++;
-            }
-        }
-
-        if (rx_cnt) {
-            if (rx_cnt > rx_high) {
-                rx_high = rx_cnt;
-            }
-            //printf("RX IRQ: %u\n", rx_cnt);
-            xTaskNotifyFromISR(data->task, UART_TASK_RX_EVENT, eSetBits, &xHigherPriorityTaskWoken);
+            xStreamBufferSendFromISR(data->rx_fifo, &c, 1, &xHigherPriorityTaskWoken);
         }
     }
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -161,25 +153,20 @@ static void __isr pio_tx_irq_func()
     // Loop through devices and fill PIO TX data from fifo
     for (uint i=0; i<N_DEVICES; i++) {
         struct device_data_t *data = &g_device_data[i];
-        uint tx_cnt = 0;
 
         // Check TX FIFO
-        while (!queue_is_empty(&data->tx_fifo)) {
+        while (!xStreamBufferIsEmpty(data->tx_fifo)) {
             if (pio_sm_is_tx_fifo_full(UART_PIO, data->tx_sm)) {
                 break;
             }
             uint8_t c;
-            if (queue_try_remove(&data->tx_fifo, &c)) {
+            if (xStreamBufferReceiveFromISR(data->tx_fifo, &c, 1, &xHigherPriorityTaskWoken)) {
                 uart_tx_program_putc(UART_PIO, data->tx_sm, c);
-                tx_cnt++;
             }
         }
-        if (queue_is_empty(&data->tx_fifo)) {
+        if (xStreamBufferIsEmpty(data->tx_fifo)) {
             // TX Fifo is empty, disable interrupt and trigger TX worker to queue more data if applicable
             pio_txnfull_set_enabled(data, false);
-            if (tx_cnt) {
-                xTaskNotifyFromISR(data->task, UART_TASK_TX_EVENT, eSetBits, &xHigherPriorityTaskWoken);
-            }
         }
     }
     portYIELD_FROM_ISR(xHigherPriorityTaskWoken);
@@ -189,46 +176,37 @@ static void __isr pio_tx_irq_func()
 /**
  * Move data from PIO UART to CDC 
  */
-static inline void worker_do_rx(struct device_data_t *data)
+static void worker_rx_task_func(__unused void *params)
 {
+    struct device_data_t *data = params;
     const struct device_t *dev = data->dev;
-    uint wr = 0;
+    uint8_t buffer[CFG_TUD_CDC_TX_BUFSIZE];
+    uint8_t *buffer_ptr = buffer;
+    size_t buffer_sz;
 
-    //printf("RX Worker %u>> %u\n", dev->cdc_itf, get_core_num());
+    printf("PIO UART%u RX Worker %u running\n", data->dev->cdc_itf);
 
-    while (!queue_is_empty(&data->rx_fifo)) {
-        if (tud_cdc_n_write_available(dev->cdc_itf)) {
-            uint8_t c;
-            if (!queue_try_remove(&data->rx_fifo, &c)) {
-                panic("RX fifo empty");
+    while (true) {
+        buffer_sz = xStreamBufferReceive(data->rx_fifo, buffer, sizeof(buffer), UART_TASK_FLUSH_INTERVAL);
+
+        if (buffer_sz>0 && tud_cdc_n_ready(dev->cdc_itf)) {
+            //printf("RX Worker %u>> rc=%u\n", dev->cdc_itf, rc);
+
+            buffer_ptr = buffer;
+            while (buffer_sz) {
+                size_t wr = tud_cdc_n_write(dev->cdc_itf, buffer_ptr, buffer_sz);
+                buffer_sz -= wr;
+                buffer_ptr += wr;
+                if (buffer_sz && !tud_cdc_n_write_available(dev->cdc_itf)) {
+                    tud_cdc_n_write_flush(dev->cdc_itf);
+                    xTaskNotifyWait(0U, UINT32_MAX, NULL, UART_TASK_FLUSH_INTERVAL);
+                }
             }
-            tud_cdc_n_write_char(dev->cdc_itf, c);
-            wr++;
+
+            tud_cdc_n_write_flush(dev->cdc_itf);
+
+            //printf("RX Worker %u<<\n", dev->cdc_itf);
         }
-        else {
-            // Output buffer full
-            break;
-        }
-    }
-
-    //if (wr) {
-    //    printf("<%u wrote=%u\n", dev->cdc_itf, wr);
-    //}
-}
-
-
-static inline void worker_do_rx_flush(struct device_data_t *data)
-{
-    const struct device_t *dev = data->dev;
-    uint drop = 0;
-    uint8_t c;
- 
-    while (!queue_is_empty(&data->rx_fifo)) {
-        queue_try_remove(&data->rx_fifo, &c);
-        drop++;
-    }
-    if (drop) {
-        printf("CDC not ready, discarding %u\n", drop);
     }
 }
 
@@ -236,74 +214,42 @@ static inline void worker_do_rx_flush(struct device_data_t *data)
 /**
  * Move data from CDC to PIO UART
  */
-static inline void worker_do_tx(struct device_data_t *data)
-{
-    const struct device_t *dev = data->dev;
-    uint8_t ch;
-    uint32_t rd;
-    uint32_t wr = 0;
-
-    //printf("TX Worker %u>> %u\n", dev->cdc_itf, get_core_num());
-
-    while (tud_cdc_n_available(dev->cdc_itf)) {
-        if (queue_is_full(&data->tx_fifo)) {
-            break;
-        }
-        rd = tud_cdc_n_read(dev->cdc_itf, &ch, 1);
-        if (rd) {
-            if (!queue_try_add(&data->tx_fifo, &ch)) {
-                DEBUG_PANIC("TX fifo full");
-            }
-            wr++;
-        }
-    }
-
-    // If the TX fifo is not empty enable interrupt that moves data to PIO 
-    if (!queue_is_empty(&data->tx_fifo)) {
-        pio_txnfull_set_enabled(data, true);
-    }
-
-    //if (wr) {
-    //    printf(">%u wrote=%u\n", dev->cdc_itf, wr);
-    //}    
-
-    //printf("TX Worker %u<<\n", dev->cdc_itf);
-}
-
-
-static void worker_task_func(__unused void *params)
+static void worker_tx_task_func(__unused void *params)
 {
     struct device_data_t *data = params;
     const struct device_t *dev = data->dev;
-    TickType_t last_flush = xTaskGetTickCount();
-    TickType_t now;
-    uint32_t events = 0;
+    uint8_t buffer[CFG_TUD_CDC_RX_BUFSIZE];
+    uint8_t *buffer_ptr = buffer;
+    size_t buffer_sz;
 
-    printf("PIO UART Worker %u running on core %d\n", data->dev->cdc_itf, get_core_num());
+    printf("PIO UART%u TX Worker running\n", data->dev->cdc_itf);
 
     while (true) {
-        events = 0;
+        xTaskNotifyWait(0U, UINT32_MAX, NULL, portMAX_DELAY);
 
-        xTaskNotifyWait(0U, UINT32_MAX, &events, UART_TASK_FLUSH_INTERVAL);
-        now = xTaskGetTickCount();
+        //printf("TX Worker %u>>\n", dev->cdc_itf);
 
-        if (events & UART_TASK_RX_EVENT) {
-            if (tud_cdc_n_ready(dev->cdc_itf)) {
-                worker_do_rx(data);
+        while (tud_cdc_n_available(dev->cdc_itf)) {
+            buffer_sz = tud_cdc_n_read(dev->cdc_itf, buffer, sizeof(buffer));
+            //printf(">%u read=%u\n", dev->cdc_itf, buffer_sz);
+
+            buffer_ptr = buffer;
+            while (buffer_sz) {
+                if (!xStreamBufferIsEmpty(data->tx_fifo)) {
+                    pio_txnfull_set_enabled(data, true);
+                }
+                size_t wr = xStreamBufferSend(data->tx_fifo, buffer_ptr, buffer_sz, portMAX_DELAY);
+                buffer_sz -= wr;
+                buffer_ptr += wr;
             }
-            else {
-                worker_do_rx_flush(data);
-            }
         }
 
-        if (events & UART_TASK_TX_EVENT) {
-            worker_do_tx(data);
+        // If the TX fifo is not empty enable interrupt that moves data to PIO 
+        if (!xStreamBufferIsEmpty(data->tx_fifo)) {
+            pio_txnfull_set_enabled(data, true);
         }
 
-        if (now - last_flush > UART_TASK_FLUSH_INTERVAL) {
-            last_flush = now;
-            tud_cdc_n_write_flush(dev->cdc_itf);
-        }
+        //printf("TX Worker %u<<\n", dev->cdc_itf);
     }
 }
 
@@ -324,7 +270,7 @@ static void pio_uart_cdc_rx_cb(uint8_t itf, void *data)
 {
     struct device_data_t *dev = data;
     //printf("%s[%d] CDC RX %u\n", pcTaskGetName(NULL), get_core_num(), itf);
-    xTaskNotify(dev->task, UART_TASK_TX_EVENT, eSetBits);
+    xTaskNotify(dev->tx_task, 1, eSetBits);
 }
 
 
@@ -332,7 +278,7 @@ static void pio_uart_cdc_tx_complete_cb(uint8_t itf, void *data)
 {
     struct device_data_t *dev = data;
     //printf("%s[%u] CDC TX Complete %u\n", pcTaskGetName(NULL), get_core_num(), itf);
-    xTaskNotify(dev->task, UART_TASK_RX_EVENT, eSetBits);
+    xTaskNotify(dev->rx_task, 1, eSetBits);
 }
 
 
@@ -380,8 +326,8 @@ void pio_uart_init()
 
         data->dev = dev;
         data->baud = UART_DEFAULT_BAUD;
-        queue_init(&data->rx_fifo, 1, UART_FIFO_SIZE);
-        queue_init(&data->tx_fifo, 1, UART_FIFO_SIZE);
+        data->rx_fifo = xStreamBufferCreateStatic(sizeof(data->rx_fifo_storage), 1, data->rx_fifo_storage, &data->rx_fifo_def);
+        data->tx_fifo = xStreamBufferCreateStatic(sizeof(data->tx_fifo_storage), 1, data->tx_fifo_storage, &data->tx_fifo_def);
 
         data->rx_sm = pio_claim_unused_sm(UART_PIO, true);
         uart_rx_program_init(UART_PIO, data->rx_sm, g_rx_program_offset, dev->rx_pin, data->baud);
@@ -395,13 +341,16 @@ void pio_uart_init()
 
         pio_set_irqn_source_enabled(UART_PIO, UART_PIO_RX_IRQ_IDX, pis_sm0_rx_fifo_not_empty + data->rx_sm, true);
 
-        char task_name[16];
-        sprintf(task_name, UART_TASK_NAME, i);
-
+        char rx_task_name[16];
+        char tx_task_name[16];
+        sprintf(rx_task_name, UART_TASK_NAME, i, "rx");
+        sprintf(tx_task_name, UART_TASK_NAME, i, "tx");
         #ifdef UART_PIO_TASK_CORE_AFFINITY
-        data->task = xTaskCreateStaticAffinitySet(worker_task_func, task_name, UART_PIO_TASK_STACK_SIZE, data, UART_PIO_TASK_PRIORITY, data->task_stack, &data->task_def, UART_PIO_TASK_CORE_AFFINITY);
+        data->rx_task = xTaskCreateStaticAffinitySet(worker_rx_task_func, rx_task_name, UART_PIO_TASK_STACK_SIZE, data, UART_PIO_TASK_PRIORITY, data->rx_task_stack, &data->rx_task_def, UART_PIO_TASK_CORE_AFFINITY);
+        data->tx_task = xTaskCreateStaticAffinitySet(worker_tx_task_func, tx_task_name, UART_PIO_TASK_STACK_SIZE, data, UART_PIO_TASK_PRIORITY, data->tx_task_stack, &data->tx_task_def, UART_PIO_TASK_CORE_AFFINITY);
         #else
-        data->task = xTaskCreateStatic(worker_task_func, task_name, UART_PIO_TASK_STACK_SIZE, data, UART_PIO_TASK_PRIORITY, data->task_stack, &data->task_def);
+        data->rx_task = xTaskCreateStatic(worker_rx_task_func, rx_task_name, UART_PIO_TASK_STACK_SIZE, data, UART_PIO_TASK_PRIORITY, data->rx_task_stack, &data->rx_task_def);
+        data->tx_task = xTaskCreateStatic(worker_tx_task_func, tx_task_name, UART_PIO_TASK_STACK_SIZE, data, UART_PIO_TASK_PRIORITY, data->tx_task_stack, &data->tx_task_def);
         #endif
     }
 
