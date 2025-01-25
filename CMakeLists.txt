@@ -38,24 +38,27 @@ include(pico_sdk_import.cmake)
 # Include FreeRTOS Kernel
 add_subdirectory(${CMAKE_CURRENT_LIST_DIR}/ext/FreeRTOS-Kernel/portable/ThirdParty/GCC/RP2040)
 
-project(xiao_sensor_servo C CXX ASM)
+project(xiao_servo_controller C CXX ASM)
 
 # Initialise the Raspberry Pi Pico SDK
 pico_sdk_init()
 
 # Add executable. Default name is the project name, version 0.1
 
-add_executable(xiao_sensor_servo)
+add_executable(xiao_servo_controller)
 
-pico_set_program_name(xiao_sensor_servo "Xiao Sensor Servo")
-pico_set_program_version(xiao_sensor_servo "0.1")
+# Define BOARD_NEOPIXEL_COUNT
+target_compile_definitions(xiao_servo_controller PRIVATE BOARD_NEOPIXEL_COUNT=16)
+
+pico_set_program_name(xiao_servo_controller "Xiao Servo Controller")
+pico_set_program_version(xiao_servo_controller "0.1")
 
 # Modify the below lines to enable/disable output over UART/USB
-pico_enable_stdio_uart(xiao_sensor_servo 1)
-pico_enable_stdio_usb(xiao_sensor_servo 0)
+pico_enable_stdio_uart(xiao_servo_controller 1)
+pico_enable_stdio_usb(xiao_servo_controller 0)
 
 # Add sources
-target_sources(xiao_sensor_servo PRIVATE
+target_sources(xiao_servo_controller PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src/main.c
     ${CMAKE_CURRENT_LIST_DIR}/src/debug.c
     ${CMAKE_CURRENT_LIST_DIR}/src/usb_descriptors.c
@@ -69,17 +72,17 @@ target_sources(xiao_sensor_servo PRIVATE
 )
 
 # Generate PIO header
-pico_generate_pio_header(xiao_sensor_servo ${CMAKE_CURRENT_LIST_DIR}/src/uart/uart_rx.pio)
-pico_generate_pio_header(xiao_sensor_servo ${CMAKE_CURRENT_LIST_DIR}/src/uart/uart_tx.pio)
-pico_generate_pio_header(xiao_sensor_servo ${CMAKE_CURRENT_LIST_DIR}/src/lighting/ws2812.pio)
+pico_generate_pio_header(xiao_servo_controller ${CMAKE_CURRENT_LIST_DIR}/src/uart/uart_rx.pio)
+pico_generate_pio_header(xiao_servo_controller ${CMAKE_CURRENT_LIST_DIR}/src/uart/uart_tx.pio)
+pico_generate_pio_header(xiao_servo_controller ${CMAKE_CURRENT_LIST_DIR}/src/lighting/ws2812.pio)
 
 # Add the standard include files to the build
-target_include_directories(xiao_sensor_servo PRIVATE
+target_include_directories(xiao_servo_controller PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/include
 )
 
 # Add any user requested libraries
-target_link_libraries(xiao_sensor_servo 
+target_link_libraries(xiao_servo_controller 
     FreeRTOS-Kernel
     FreeRTOS-Kernel-Heap4
     tinyusb_device
@@ -93,5 +96,5 @@ target_link_libraries(xiao_sensor_servo
     hardware_watchdog
 )
 
-pico_add_extra_outputs(xiao_sensor_servo)
+pico_add_extra_outputs(xiao_servo_controller)
 
