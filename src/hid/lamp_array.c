@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Peter Christoffersen
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "lamp_array.h"
 
 #include <tusb.h>
@@ -17,36 +48,37 @@
 
 #define LAMP_COUNT (NEOPIXEL_STRIP1_COUNT)
 
-#define LAMP_MIN_UPDATE_INTERVAL 20000 // 20ms
-#define LAMP_UPDATE_LATENCY 10000 // 10ms
+#define LAMP_MIN_UPDATE_INTERVAL 10000 // 10ms
 
 #define LAMP_WIDTH 10000
 #define LAMP_HEIGHT 10000
 #define LAMP_DEPTH 2000
-
-static const tud_desc_lamp_array_attributes_report_t array_atttibutes_report = {
-    .lamp_count = LAMP_COUNT,
-    .width = LAMP_COUNT*LAMP_WIDTH,
-    .height = LAMP_HEIGHT,
-    .depth = LAMP_DEPTH,
-    .kind = LAMP_ARRAY_KIND_CHASSIS,
-    .min_update_interval = LAMP_MIN_UPDATE_INTERVAL
-};
-
 
 static uint16_t current_lamp_id = 0;
 static bool autonomous_mode = false;
 
 uint16_t lamp_array_get_array_attributes(uint8_t* buffer, uint16_t reqlen)
 {
-    if (reqlen < sizeof(array_atttibutes_report)) {
+    if (reqlen < sizeof(tud_desc_lamp_array_attributes_report_t)) {
         DEBUG("lamp_array_get_array_attributes: invalid buffer size\n");
         return 0;
     }
-    DEBUG("lamp_array_get_array_attributes report_size=%z\n", sizeof(array_atttibutes_report));
-    assert(reqlen >= sizeof(array_atttibutes_report));
-    memcpy(buffer, &array_atttibutes_report, sizeof(array_atttibutes_report));
-    return sizeof(array_atttibutes_report);
+    DEBUG("lamp_array_get_array_attributes report_size=%u\n", sizeof(tud_desc_lamp_array_attributes_report_t));
+    assert(reqlen >= sizeof(tud_desc_lamp_array_attributes_report_t));
+
+    static tud_desc_lamp_array_attributes_report_t report = {
+        .lamp_count = LAMP_COUNT,
+        .width = LAMP_COUNT*LAMP_WIDTH,
+        .height = LAMP_HEIGHT,
+        .depth = LAMP_DEPTH,
+        .kind = LAMP_ARRAY_KIND_CHASSIS,
+        .min_update_interval = LAMP_MIN_UPDATE_INTERVAL
+    };
+    report.min_update_interval = MAX(report.min_update_interval, neopixel_strip_transmit_time_us(NEOPIXEL_STRIP1));
+
+    memcpy(buffer, &report, sizeof(report));
+
+    return sizeof(report);
 }
 
 void lamp_array_set_attributes(uint8_t const* buffer, uint16_t bufsize)
@@ -81,7 +113,7 @@ uint16_t lamp_array_get_attributes(uint8_t* buffer, uint16_t reqlen)
         .position_y = LAMP_HEIGHT/2,
         .position_z = 0,
         .purpose = LAMP_PURPOSE_BRANDING,
-        .update_latency = LAMP_UPDATE_LATENCY,
+        .update_latency = neopixel_strip_update_latency_us(NEOPIXEL_STRIP1),
         .red_level_count = 0xFF,
         .green_level_count = 0xFF,
         .blue_level_count = 0xFF,
@@ -89,7 +121,7 @@ uint16_t lamp_array_get_attributes(uint8_t* buffer, uint16_t reqlen)
         .is_programmable = 1
     };
 
-    if (current_lamp_id+1 < array_atttibutes_report.lamp_count) {
+    if (current_lamp_id+1 < LAMP_COUNT) {
         current_lamp_id++;
     }
     else {
@@ -158,11 +190,11 @@ void lamp_array_set_range_update(uint8_t const* buffer, uint16_t bufsize)
 
 void lamp_array_set_array_control(uint8_t const* buffer, uint16_t bufsize)
 {
-    assert(bufsize == sizeof(tud_desc_lamp_control_t));
-    tud_desc_lamp_control_t const* control = (tud_desc_lamp_control_t const*) buffer;
+    assert(bufsize == sizeof(tud_desc_lamp_array_control_t));
+    tud_desc_lamp_array_control_t const* control = (tud_desc_lamp_array_control_t const*) buffer;
 
-    DEBUG("lamp_array_set_array_control: autonomousMode=%u\n", control->autonomousMode);
-    bool new_mode = control->autonomousMode;
+    bool new_mode = control->flags & LAMP_ARRAY_CONTROL_FLAG_AUTONOMOUS;
+    DEBUG("lamp_array_set_array_control: autonomousMode=%u\n", new_mode);
     if (new_mode != autonomous_mode) {
         neopixel_strip_fill(NEOPIXEL_STRIP1, NEOPIXEL_BLACK);
         neopixel_strip_show(NEOPIXEL_STRIP1);

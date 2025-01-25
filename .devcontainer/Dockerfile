@@ -10,6 +10,7 @@ FROM mcr.microsoft.com/devcontainers/cpp:ubuntu-24.04
 RUN apt-get update && export DEBIAN_FRONTEND=noninteractive \
      && apt-get -y install --no-install-recommends \
         gdb-multiarch \
+        python3-venv \
         libusb-1.0-0 \
         libhidapi-hidraw0 \
         libhidapi-libusb0 \

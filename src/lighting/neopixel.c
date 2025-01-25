@@ -1,3 +1,34 @@
+/**
+ * BSD 3-Clause License
+ * 
+ * Copyright (c) 2025, Peter Christoffersen
+ * 
+ * Redistribution and use in source and binary forms, with or without
+ * modification, are permitted provided that the following conditions are met:
+ * 
+ * 1. Redistributions of source code must retain the above copyright notice, this
+ *    list of conditions and the following disclaimer.
+ * 
+ * 2. Redistributions in binary form must reproduce the above copyright notice,
+ *    this list of conditions and the following disclaimer in the documentation
+ *    and/or other materials provided with the distribution.
+ * 
+ * 3. Neither the name of the copyright holder nor the names of its
+ *    contributors may be used to endorse or promote products derived from
+ *    this software without specific prior written permission.
+ * 
+ * THIS SOFTWARE IS PROVIDED BY THE COPYRIGHT HOLDERS AND CONTRIBUTORS "AS IS"
+ * AND ANY EXPRESS OR IMPLIED WARRANTIES, INCLUDING, BUT NOT LIMITED TO, THE
+ * IMPLIED WARRANTIES OF MERCHANTABILITY AND FITNESS FOR A PARTICULAR PURPOSE ARE
+ * DISCLAIMED. IN NO EVENT SHALL THE COPYRIGHT HOLDER OR CONTRIBUTORS BE LIABLE
+ * FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL, EXEMPLARY, OR CONSEQUENTIAL
+ * DAMAGES (INCLUDING, BUT NOT LIMITED TO, PROCUREMENT OF SUBSTITUTE GOODS OR
+ * SERVICES; LOSS OF USE, DATA, OR PROFITS; OR BUSINESS INTERRUPTION) HOWEVER
+ * CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT, STRICT LIABILITY,
+ * OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF THE USE
+ * OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+ */
+
 #include "neopixel.h"
 
 #include <stdio.h>
@@ -16,6 +47,7 @@ struct strip_t {
     uint n_pixels;
     float bitrate;
     bool rgbw;
+    uint reset_base_us;
     uint reset_us; // time to wait before sending next update (includes time needed to empty the PIO fifo)
 };
 
@@ -63,6 +95,7 @@ static const struct strip_t g_strips[] = {
         .n_pixels       = NEOPIXEL_STRIP0_COUNT,
         .bitrate        = NEOPIXEL_STRIP0_FREQUENCY,
         .rgbw           = NEOPIXEL_STRIP0_RGBW,
+        .reset_base_us  = NEOPIXEL_STRIP0_RESET_US,
         .reset_us = NEOPIXEL_RESET_DELAY(NEOPIXEL_STRIP0_RESET_US, NEOPIXEL_STRIP0_FREQUENCY, NEOPIXEL_STRIP0_RGBW, NEOPIXEL_STRIP0_COUNT),
     },
     #endif
@@ -73,6 +106,7 @@ static const struct strip_t g_strips[] = {
         .n_pixels       = NEOPIXEL_STRIP1_COUNT,
         .bitrate        = NEOPIXEL_STRIP1_FREQUENCY,
         .rgbw           = NEOPIXEL_STRIP1_RGBW,
+        .reset_base_us  = NEOPIXEL_STRIP1_RESET_US,
         .reset_us = NEOPIXEL_RESET_DELAY(NEOPIXEL_STRIP1_RESET_US, NEOPIXEL_STRIP1_FREQUENCY, NEOPIXEL_STRIP1_RGBW, NEOPIXEL_STRIP1_COUNT),
     },
     #endif
@@ -252,6 +286,18 @@ void neopixel_strip_show(uint id)
 
 }
 
+
+uint32_t neopixel_strip_update_latency_us(uint id)
+{
+    const struct strip_t *strip = &g_strips[id];
+    return NEOPIXEL_TRANSMIT_US(strip->bitrate, NEOPIXEL_BPP(strip->rgbw), strip->n_pixels);
+}
+
+uint32_t neopixel_strip_transmit_time_us(uint id)
+{
+    const struct strip_t *strip = &g_strips[id];
+    return strip->reset_base_us + NEOPIXEL_TRANSMIT_US(strip->bitrate, NEOPIXEL_BPP(strip->rgbw), strip->n_pixels);
+}
 
 
 void neopixel_init()

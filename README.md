@@ -42,3 +42,10 @@ Tested with [Waveshare ST3125](https://www.waveshare.com/product/robotics/motors
  ## Lidar
 
 The lidar connector works out of the box with a [Slamtec RPLIDAR C1](https://www.slamtec.com/en/C1) But should also work with other RPLIDAR models from the A*, C*, and S* series.
+
+
+## Lighting
+
+See the [utils](utils) folder for a python example of how to control the neopixel strip. 
+
+If connected to a windows machine the lighting can be controlled via `Settings > Personalization > Dynamic Lighting`
