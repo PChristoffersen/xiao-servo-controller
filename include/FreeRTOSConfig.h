@@ -127,7 +127,7 @@ extern uint64_t ulMainGetRuntimeCounterValue(void);
 */
 
 /* SMP port only */
-#define configNUMBER_OF_CORES                   1
+#define configNUMBER_OF_CORES                   2
 #define configTICK_CORE                         0
 #define configRUN_MULTIPLE_PRIORITIES           1
 #if configNUMBER_OF_CORES > 1

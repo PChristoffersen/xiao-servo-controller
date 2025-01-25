@@ -6,7 +6,7 @@
 #include <task.h>
 
 #include "board_config.h"
-#include "hid/keyboard.h"
+#include "hid/gamepad.h"
 #include "lighting/status_led.h"
 #include "lighting/neopixel.h"
 #include "uart/pio_uart.h"
@@ -19,37 +19,6 @@ static_assert(USBD_TASK_PRIORITY < configMAX_PRIORITIES);
 
 static bool g_usb_device_configured = false;
 
-
-#define STATISTICS_TASK_PRIORITY ( 1 )
-#define TEST_TASK_PRIORITY       ( 11 )
-
-
-
-
-#if 0
-static void test_task(__unused void *params)
-{
-    uint cnt = 0;
-
-    neopixel_strip_set_enabled(HID_NEOPIXEL_STRIP, true);
-    neopixel_strip_fill(HID_NEOPIXEL_STRIP, NEOPIXEL_BLACK);
-    neopixel_strip_show(HID_NEOPIXEL_STRIP);
-
-    while (true) {
-        vTaskDelay(pdMS_TO_TICKS(100));
-        neopixel_strip_set(HID_NEOPIXEL_STRIP, cnt, ugrb_color(0x00, 0x00, 0x20));
-        neopixel_strip_show(HID_NEOPIXEL_STRIP);
-
-        cnt++;
-        if (cnt>=HID_NEOPIXEL_COUNT) {
-            neopixel_strip_fill(HID_NEOPIXEL_STRIP, NEOPIXEL_BLACK);
-            cnt = 0;
-        }
-    }
-
-    vTaskDelete(NULL);
-}
-#endif
 
 
 
@@ -128,9 +97,10 @@ static void usb_device_task(__unused void *param)
     vTaskDelay(pdMS_TO_TICKS(100));
 
     tud_init(TUD_OPT_RHPORT);
+    watchdog_update();
 
     pio_uart_init();
-    keyboard_init();
+    gamepad_init();
 
     while (true) {
         tud_task();
@@ -195,11 +165,14 @@ static void app_main(__unused void *params)
 {
     printf("Starting main\n");
 
+    watchdog_update();
+
     // Clear all neopixels
     neopixel_strip_set_enabled(NEOPIXEL_STRIP1, true);
     neopixel_strip_fill(NEOPIXEL_STRIP1, NEOPIXEL_BLACK);
     neopixel_strip_show(NEOPIXEL_STRIP1);
 
+    watchdog_update();
 
     #ifdef USBD_TASK_CORE_AFFINITY
     g_usb_task = xTaskCreateStaticAffinitySet(usb_device_task, USBD_TASK_NAME, USBD_TASK_STACK_SIZE, NULL, USBD_TASK_PRIORITY, g_usb_task_stack, &g_usb_task_buf, USBD_TASK_CORE_AFFINITY);
