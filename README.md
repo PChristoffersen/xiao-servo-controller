@@ -11,7 +11,7 @@ SeeedStudio Xiao smart servo controller board.
 The firmware configures the board as a USB composite device:
 * CDC UART for smart servo
 * CDC UART for lidar
-* HID Keyboard for buttons
+* HID gamepad for buttons
 * HID Lighting for Neopixel control [Dynamic Lighting devices](https://learn.microsoft.com/en-us/windows-hardware/design/component-guidelines/dynamic-lighting-devices)
 
 ## Hardware
@@ -30,8 +30,8 @@ The board should work with one of the following microcontrollers:
 * 2x Smart servo (Molex 5264/2.54 3P)
 * 1x Lidar (JST XH2.54-5P)
 * 1x Level shifted WS2812b Neopixel 
-* 2x Button (2P dupont)
-* 1x AUX Generic connector (3P dupont)
+* 2x Button (2P header)
+* 1x AUX Generic connector (3P header)
 
 ## Smart servos
 

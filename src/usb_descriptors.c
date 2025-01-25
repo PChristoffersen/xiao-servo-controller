@@ -79,9 +79,36 @@ uint8_t const * tud_descriptor_device_cb(void)
 //--------------------------------------------------------------------+
 
 #if CFG_TUD_HID > 0
+
+
+// Gamepad Report Descriptor Template
+// with 2 buttons with following layout
+// | Button Map (1 byte) |
+#define TUD_HID_REPORT_DESC_GAMEPAD_CUSTOM(...) \
+  HID_USAGE_PAGE ( HID_USAGE_PAGE_DESKTOP     )                 ,\
+  HID_USAGE      ( HID_USAGE_DESKTOP_GAMEPAD  )                 ,\
+  HID_COLLECTION ( HID_COLLECTION_APPLICATION )                 ,\
+    /* Report ID if any */\
+    __VA_ARGS__ \
+    /* 8 bit Button Map */ \
+    HID_USAGE_PAGE     ( HID_USAGE_PAGE_BUTTON                  ) ,\
+    HID_USAGE_MIN      ( 1                                      ) ,\
+    HID_USAGE_MAX      ( 2                                      ) ,\
+    HID_LOGICAL_MIN    ( 0                                      ) ,\
+    HID_LOGICAL_MAX    ( 1                                      ) ,\
+    HID_REPORT_COUNT   ( 2                                      ) ,\
+    HID_REPORT_SIZE    ( 1                                      ) ,\
+    HID_INPUT          ( HID_DATA | HID_VARIABLE | HID_ABSOLUTE ) ,\
+    /* button padding */ \
+    HID_REPORT_COUNT ( 1                                       ) ,\
+    HID_REPORT_SIZE  ( 6                                       ) ,\
+    HID_INPUT        ( HID_CONSTANT                            ) ,\
+  HID_COLLECTION_END \
+
+
 uint8_t const desc_hid_report[] =
 {
-    TUD_HID_REPORT_DESC_KEYBOARD( HID_REPORT_ID(REPORT_ID_KEYBOARD) ),
+    TUD_HID_REPORT_DESC_GAMEPAD_CUSTOM( HID_REPORT_ID(REPORT_ID_GAMEPAD) ),
     TUD_HID_REPORT_DESC_LIGHTING( REPORT_ID_LIGHTING_LAMP_ARRAY_ATTRIBUTES )
 };
 

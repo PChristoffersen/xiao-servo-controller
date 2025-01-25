@@ -62,8 +62,8 @@ target_sources(xiao_servo_controller PRIVATE
     ${CMAKE_CURRENT_LIST_DIR}/src/main.c
     ${CMAKE_CURRENT_LIST_DIR}/src/debug.c
     ${CMAKE_CURRENT_LIST_DIR}/src/usb_descriptors.c
+    ${CMAKE_CURRENT_LIST_DIR}/src/hid/gamepad.c
     ${CMAKE_CURRENT_LIST_DIR}/src/hid/hid_device.c
-    ${CMAKE_CURRENT_LIST_DIR}/src/hid/keyboard.c
     ${CMAKE_CURRENT_LIST_DIR}/src/hid/lamp_array.c
     ${CMAKE_CURRENT_LIST_DIR}/src/lighting/neopixel.c
     ${CMAKE_CURRENT_LIST_DIR}/src/lighting/status_led.c

@@ -5,7 +5,7 @@
 #include <tusb.h>
 #include "usb_descriptors.h"
 #include "lamp_array.h"
-#include "keyboard.h"
+#include "gamepad.h"
 
 //--------------------------------------------------------------------+
 // HID Device callbacks
@@ -14,8 +14,8 @@
 void tud_hid_set_report_cb(uint8_t instance, uint8_t report_id, hid_report_type_t report_type, uint8_t const* buffer, uint16_t bufsize)
 {
     switch (report_id) {
-        case REPORT_ID_KEYBOARD:
-            keyboard_set_report(buffer, bufsize);
+        case REPORT_ID_GAMEPAD:
+            gamepad_set_report(buffer, bufsize);
             break;
         case REPORT_ID_LIGHTING_LAMP_ATTRIBUTES_REQUEST: 
             lamp_array_set_attributes(buffer, bufsize);

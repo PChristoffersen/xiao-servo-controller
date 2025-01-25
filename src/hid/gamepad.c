@@ -1,4 +1,4 @@
-#include "keyboard.h"
+#include "gamepad.h"
 
 #include <stdio.h>
 #include <pico/stdlib.h>
@@ -7,9 +7,8 @@
 #include <timers.h>
 #include <tusb.h>
 
-#define KEYBOARD_TASK_NAME "keyboard"
-
-#define KEYBOARD_DEBOUNCE_DELAY pdMS_TO_TICKS(KEYBOARD_DEBUNCE_DELAY_MS)
+#define GAMEPAD_TASK_NAME "gamepad"
+#define GAMEPAD_DEBOUNCE_DELAY pdMS_TO_TICKS(GAMEPAD_DEBUNCE_DELAY_MS)
 
 #include "board_config.h"
 #include "usb_descriptors.h"
@@ -20,14 +19,14 @@
 
 struct device_t {
     uint pin;
-    uint code;
+    uint8_t report_bit;
 };
 
 struct device_data_t {
     const struct device_t *dev;
 
     bool state;
-    uint8_t *report;
+    uint8_t report_bit;
 
     StaticTimer_t timer_def;
     TimerHandle_t timer;
@@ -40,17 +39,17 @@ struct device_data_t {
 // NOTE: The pin numbers must be sequential without any gaps
 static const struct device_t g_devices[] = {
     {
-        .pin  = KEYBOARD_SW1_PIN,
-        .code = KEYBOARD_SW1_CODE,
+        .pin  = GAMEPAD_SW1_PIN,
+        .report_bit = (1U<<0),
     },
     {
-        .pin  = KEYBOARD_SW2_PIN,
-        .code = KEYBOARD_SW2_CODE,
+        .pin  = GAMEPAD_SW2_PIN,
+        .report_bit = (1U<<1),
     },
 };
 #define N_DEVICES (count_of(g_devices))
 
-static_assert(KEYBOARD_SW2_PIN == KEYBOARD_SW1_PIN+1, "The pin numbers must be sequential without any gaps");
+static_assert(GAMEPAD_SW2_PIN == GAMEPAD_SW1_PIN+1, "The pin numbers must be sequential without any gaps");
 
 
 
@@ -58,26 +57,27 @@ static struct device_data_t g_device_data[N_DEVICES];
 
 #define DEVICE_DATA(gpio) (&g_device_data[gpio - g_devices[0].pin])
 
-static uint8_t g_report[6] = { 0 };
+static uint8_t g_report = 0x00;
 
 static TaskHandle_t g_task = NULL;
 
 
 // Debounce timer callback
-static void keyboard_timer_cb(TimerHandle_t xTimer)
+static void gamepad_timer_cb(TimerHandle_t xTimer)
 {
     struct device_data_t *data = pvTimerGetTimerID(xTimer);
     const struct device_t *dev = data->dev;
     bool state = !gpio_get(dev->pin);
     if (state != data->state) {
         data->state = state;
-        *data->report = state ? dev->code : HID_KEY_NONE;
-        tud_hid_keyboard_report(REPORT_ID_KEYBOARD, 0, g_report);
+        g_report = (g_report & ~dev->report_bit) | (state ? dev->report_bit : 0);
+
+        tud_hid_report(REPORT_ID_GAMEPAD, &g_report, sizeof(g_report));
     }
 }
 
 
-static void keyboard_irq_cb(uint gpio, uint32_t event_mask)
+static void gamepad_irq_cb(uint gpio, uint32_t event_mask)
 {
     struct device_data_t *data = DEVICE_DATA(gpio);
     BaseType_t xHigherPriorityTaskWoken = pdFALSE;
@@ -87,7 +87,7 @@ static void keyboard_irq_cb(uint gpio, uint32_t event_mask)
 
 
 
-void keyboard_set_report(uint8_t const* buffer, uint16_t bufsize)
+void gamepad_set_report(uint8_t const* buffer, uint16_t bufsize)
 {
     #if 0
     printf("Keyboard set report: bufsize=%u   data=(", bufsize);
@@ -99,7 +99,7 @@ void keyboard_set_report(uint8_t const* buffer, uint16_t bufsize)
 }
 
 
-void keyboard_init()
+void gamepad_init()
 {
     printf("Initializing keyboard\n");
 
@@ -108,7 +108,7 @@ void keyboard_init()
         struct device_data_t *data = &g_device_data[i];
 
         data->dev = dev;
-        data->report = &g_report[i];
+        //data->report = &g_report[i];
 
         gpio_init(dev->pin);
         gpio_set_dir(dev->pin, GPIO_IN);
@@ -118,8 +118,8 @@ void keyboard_init()
 
         char timer_name[16];
         sprintf(timer_name, "key_%u", i);
-        data->timer = xTimerCreateStatic(timer_name, KEYBOARD_DEBOUNCE_DELAY, pdFALSE, data, keyboard_timer_cb, &data->timer_def);
+        data->timer = xTimerCreateStatic(timer_name, GAMEPAD_DEBOUNCE_DELAY, pdFALSE, data, gamepad_timer_cb, &data->timer_def);
 
-        gpio_set_irq_enabled_with_callback(dev->pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, keyboard_irq_cb);
+        gpio_set_irq_enabled_with_callback(dev->pin, GPIO_IRQ_EDGE_RISE | GPIO_IRQ_EDGE_FALL, true, gamepad_irq_cb);
     }
 }
