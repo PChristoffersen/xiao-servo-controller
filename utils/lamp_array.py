@@ -214,6 +214,7 @@ class LampArray:
         self._attributes: LampArrayAttributes = None
         self._lamp_attributes: List[LampAttributes] = []
         self._lamp_data: List[LampArray._LampData] = []
+        self._show_pending = False
 
     @property
     def device(self):
@@ -250,55 +251,57 @@ class LampArray:
         """
         return self._attributes.min_update_interval / 1e6
 
-    def range_update(self, id_start: int, id_end, color: LampColor, complete: bool = True):
+    def clear(self, show=False):
         """
-        Update a range of lamps with the same color.
-        If complete is True the lamps are updated immediately, otherwise the update is deferred.
+        Clear all lamps
         """
-        assert id_start <= id_end
-        assert id_end < self._attributes.lamp_count
-        assert id_start >= 0
-        for i in range(id_start, id_end+1):
-            self._lamp_data[i].color = color
-            self._lamp_data[i].dirty = not complete
-        update = LampRangeUpdate(flags=LampArrayFlags.UPDATE_COMPLETE if complete else 0,
-                                 lamp_id_start=id_start, lamp_id_end=id_end, color=color)
-        self._device.send_feature_report(bytes([LampArray.REPORT_ID_LIGHTING_LAMP_RANGE_UPDATE])+bytes(update))
+        self.fill(LampColor(), show=show)
 
-    def multi_update(self, ids: List[int], colors: List[LampColor], complete: bool = True):
+    def fill(self, color: LampColor, show=False):
         """
-        Update a list of lamps with different colors
-        If complete is True the lamps are updated immediately, otherwise the update is deferred.
+        Fill all lamps with the same color
         """
-        assert len(ids) == len(colors)
-        assert len(ids) <= 8
-        update = LampMultiUpdate(lamp_count=len(ids), flags=LampArrayFlags.UPDATE_COMPLETE if complete else 0)
-        for i in range(len(ids)):
-            assert ids[i] < self._attributes.lamp_count
-            assert ids[i] >= 0
-            update.lamp_ids[i] = ids[i]
-            update.color[i] = colors[i]
-            self._lamp_data[ids[i]].color = colors[i]
-            self._lamp_data[ids[i]].dirty = not complete
-        self._device.send_feature_report(bytes([LampArray.REPORT_ID_LIGHTING_LAMP_MULTI_UPDATE])+bytes(update))
+        self.fill_range(0, self._attributes.lamp_count, color, show=show)
 
-    def update(self):
+    def fill_range(self, id_start: int, count: int, color: LampColor, show=False):
+        """
+        Fill a range of lamps with the same color
+        """
+        if show:
+            if self._show_pending:
+                self.fill_range(int(id_start), int(count), color, show=False)
+                self.show()
+            else:
+                self._range_update(int(id_start), int(id_start+count-1), color, complete=True)                
+        else:
+            for i in range(int(id_start), int(id_start+count)):
+                self._lamp_data[i].color = color
+                self._lamp_data[i].dirty = True
+            self._show_pending = True
+
+    def set(self, id: int, color: LampColor, show=False):
+        """
+        Set the color of a lamp
+        """
+        self._lamp_data[id].color = color
+        self._lamp_data[id].dirty = True
+        if show:
+            self.show()
+        else:
+            self._show_pending = True
+
+    def get(self, id: int) -> LampColor:
+        """
+        Get the color of a lamp
+        """
+        return self._lamp_data[id].color
+
+
+    def show(self):
         """
         Update all lamps that have been marked as dirty
         """
-        updates = []
-        for i in range(self._attributes.lamp_count):
-            if self._lamp_data[i].dirty:
-                updates.append(i)
-                self._lamp_data[i].dirty = False
-        if not updates:
-            return
-        chunk_size = 8
-        for i in range(0, len(updates), chunk_size):
-            chunk = updates[i:i + chunk_size]
-            ids = [update for update in chunk]
-            colors = [self._lamp_data[update].color for update in chunk]
-            self.multi_update(ids, colors, complete=(i + chunk_size >= len(updates)))
+        self._update()
 
 
 
@@ -327,7 +330,7 @@ class LampArray:
             assert response.lamp_id == i
             self._lamp_attributes.append(response)
             self._lamp_data.append(LampArray._LampData(color=LampColor(), dirty=False))
-        
+        self._show_pending = False
         if self._control_on_open:
             self.set_autonomous_mode(False)
 
@@ -342,6 +345,66 @@ class LampArray:
         self._lamp_attributes = []
         self._lamp_data = []
 
+
+    def _update(self):
+        ids = []
+        colors = []
+        for i in range(self._attributes.lamp_count):
+            if self._lamp_data[i].dirty:
+                ids.append(i)
+                colors.append(self._lamp_data[i].color)
+                self._lamp_data[i].dirty = False
+        
+        if not ids:
+            if self._show_pending:
+                # There is a pending show, but no updates so send an empty update
+                self._multi_update([], [], complete=True)
+                self._show_pending = False
+            return
+
+        count = len(ids)
+        for i in range(0, count, 8):
+            chunk = min(8, count-i)
+            self._multi_update(ids[i:i+chunk], colors[i:i+chunk], complete=(i+chunk >= count))
+        self._show_pending = False
+
+
+    def _range_update(self, id_start: int, id_end, color: LampColor, complete: bool = True):
+        """
+        Update a range of lamps with the same color.
+        If complete is True the lamps are updated immediately, otherwise the update is deferred.
+        """
+        assert id_start <= id_end
+        assert id_end < self._attributes.lamp_count
+        assert id_start >= 0
+        for i in range(id_start, id_end+1):
+            self._lamp_data[i].color = color
+            self._lamp_data[i].dirty = False
+        update = LampRangeUpdate(flags=LampArrayFlags.UPDATE_COMPLETE if complete else 0,
+                                 lamp_id_start=id_start, lamp_id_end=id_end, color=color)
+        self._device.send_feature_report(bytes([LampArray.REPORT_ID_LIGHTING_LAMP_RANGE_UPDATE])+bytes(update))
+        self._show_pending = not complete
+
+    def _multi_update(self, ids: List[int], colors: List[LampColor], complete: bool = True):
+        """
+        Update a list of lamps with different colors
+        If complete is True the lamps are updated immediately, otherwise the update is deferred.
+        """
+        assert len(ids) == len(colors)
+        assert len(ids) <= 8
+        update = LampMultiUpdate(lamp_count=len(ids), flags=LampArrayFlags.UPDATE_COMPLETE if complete else 0)
+        for i in range(len(ids)):
+            assert ids[i] < self._attributes.lamp_count
+            assert ids[i] >= 0
+            update.lamp_ids[i] = ids[i]
+            update.color[i] = colors[i]
+            self._lamp_data[ids[i]].color = colors[i]
+            self._lamp_data[ids[i]].dirty = False
+        self._device.send_feature_report(bytes([LampArray.REPORT_ID_LIGHTING_LAMP_MULTI_UPDATE])+bytes(update))
+        self._show_pending = not complete
+
+
+
     def __enter__(self):
         self.open()
         return self
@@ -355,14 +418,13 @@ class LampArray:
         """
         Set the color of a lamp
         """
-        self._lamp_data[key].color = color
-        self._lamp_data[key].dirty = True
+        self.set(key, color)
 
     def __getitem__(self, key: int) -> LampColor:
         """
         Get the color of a lamp
         """
-        return self._lamp_data[key].color
+        return self.get(key)
 
     def __len__(self):
         """

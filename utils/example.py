@@ -42,32 +42,37 @@ def main():
         print("Serial No: %s" % device.get_serial_number_string())
         print("Min update interval: %.3fs" % lamps.min_update_interval)
         print("Number of lamps: %d" % lamps.n_lamps)
-        print("Attributes: %s" % lamps.attributes)
         print("")
 
         print("Range update")
-        lamps.range_update(0, 8-1, (255, 0, 0), complete=False)
-        lamps.range_update(8, lamps.n_lamps-1, (0, 0, 255))
+        lamps.fill_range(0, lamps.n_lamps/2, (255, 0, 0))
+        lamps.fill_range(lamps.n_lamps/2, lamps.n_lamps/2, (0, 0, 255), show=True)
+        
+        sleep(2)
+
+        print("Fill all")
+        lamps.fill((0, 255, 0), show=True)
+
+        sleep(2)
+
+        print("Fill all deferred")
+        lamps.fill((64, 0, 64))
+        lamps.show()
+
         sleep(2)
 
         print("Clear all")
-        lamps.range_update(0, lamps.n_lamps-1, (0, 0, 0))
+        lamps.clear(show=True)
+
+        sleep(2)
 
         print("Single update")
         lamps[0] = (255, 0, 0)
         lamps[1] = (0, 255, 0)
         lamps[2] = (0, 0, 255)
-        lamps.update()
+        lamps.show()
 
         sleep(2)
-
-        print("Random colors update")
-        for i in range(0, lamps.n_lamps):
-            lamps[i] = (random.randint(0, 128), random.randint(0, 128), random.randint(0, 128))
-        lamps.update()
-
-        sleep(2)
-
 
         print("Chase")
         while True:
@@ -75,7 +80,7 @@ def main():
                 for i in range(0, lamps.n_lamps):
                     lamps[i] = color
                     lamps[(i+lamps.n_lamps-1) % lamps.n_lamps] = (0, 0, 0)
-                    lamps.update()
+                    lamps.show()
                     sleep(max(0.05, lamps.min_update_interval))
 
 

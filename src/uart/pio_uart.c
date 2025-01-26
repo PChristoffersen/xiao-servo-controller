@@ -313,6 +313,13 @@ static void pio_uart_cdc_tx_complete_cb(uint8_t itf, void *data)
 }
 
 
+void pio_uart_cdc_line_state_cb(uint8_t itf, bool dtr, bool rts, void *_data)
+{
+    struct device_data_t *data = _data;
+    printf("%s[%u] CDC State: DTR=%u RTS=%u\n", pcTaskGetName(NULL), get_core_num(), dtr, rts);
+}
+
+
 static void pio_uart_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const *line_coding, void *_data)
 {
     struct device_data_t *data = _data;
@@ -325,6 +332,8 @@ static void pio_uart_cdc_line_coding_cb(uint8_t itf, cdc_line_coding_t const *li
         data->baud = line_coding->bit_rate;
     }
 }
+
+
 
 
 
@@ -368,6 +377,7 @@ void pio_uart_init()
 
         usb_cdc_device_set_rx_callback(dev->cdc_itf, pio_uart_cdc_rx_cb, data);
         usb_cdc_device_set_tx_complete_callback(dev->cdc_itf, pio_uart_cdc_tx_complete_cb, data);
+        usb_cdc_device_set_line_state_callback(dev->cdc_itf, pio_uart_cdc_line_state_cb, data);
         usb_cdc_device_set_line_coding_callback(dev->cdc_itf, pio_uart_cdc_line_coding_cb, data);
 
         pio_set_irqn_source_enabled(UART_PIO, UART_PIO_RX_IRQ_IDX, pis_sm0_rx_fifo_not_empty + data->rx_sm, true);
